@@ -165,6 +165,7 @@ streamlit run streamlit_app.py
 
 ## 🗂️ Graph Structure
 
+```
 Paper Nodes:
   ┌─────────────────────┐        ┌─────────────────┐
   │ Graph RAG with Neo4j│        │ Intro to RAG    │
@@ -185,6 +186,7 @@ Paper Nodes:
          ┌─────┐
          │Alice│
          └─────┘
+```
 
 ### How it maps to the project:
 
