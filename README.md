@@ -163,6 +163,47 @@ streamlit run streamlit_app.py
 
 ---
 
+## 🗂️ Graph Structure
+
+Paper Nodes:
+  ┌─────────────────────┐        ┌─────────────────┐
+  │ Graph RAG with Neo4j│        │ Intro to RAG    │
+  └─────────┬───────────┘        └─────────┬───────┘
+            │ RELATED_TO                   │ RELATED_TO
+            ▼                               ▼
+         ┌─────┐                         ┌─────┐
+         │Neo4j│                         │ RAG │
+         └─────┘                         └─────┘
+            ▲                               ▲
+            │ CONNECTED_TO                  │
+         ┌─────┐                         ┌─────┐
+         │ Topic│                         │Topic│
+         └─────┘                         └─────┘
+            │
+            │ AUTHORED_BY
+            ▼
+         ┌─────┐
+         │Alice│
+         └─────┘
+
+### How it maps to the project:
+
+- Papers: Graph RAG with Neo4j, Intro to RAG
+
+- Topics: Neo4j, RAG
+
+- Authors: Alice (plus Bob, Charlie added dynamically)
+
+- Relationships:
+
+-- RELATED_TO → Paper ↔ Topic
+
+-- AUTHORED_BY → Paper ↔ Author
+
+-- CONNECTED_TO → Topic ↔ Topic
+
+---
+
 ## 📝 Notes
 
 * `config.py` contains:
