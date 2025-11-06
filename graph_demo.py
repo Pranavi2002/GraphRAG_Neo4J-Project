@@ -6,7 +6,7 @@ from config import driver
 # # ---------------------------
 # uri = "bolt://localhost:7687"
 # user = "neo4j"
-# password = "neo4j123"   # Use your Neo4j password here
+# password = "xxxx"   # Use your Neo4j password here
 
 # driver = GraphDatabase.driver(uri, auth=(user, password))
 
