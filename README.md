@@ -1,6 +1,14 @@
-# Graph + Vector RAG System (Neo4j-Focused)
+# 📚 Graph + Vector RAG System (Neo4j-Focused)
 
-This project demonstrates a **Retrieval-Augmented Generation (RAG) system** with a strong focus on **Neo4j graph database** for storing, retrieving, and querying document chunks and metadata. It also integrates **FAISS** for vector similarity search and a **Streamlit frontend** for interacting with the system.
+This project demonstrates a **Retrieval-Augmented Generation (RAG) system** with a strong focus on **Neo4j graph database** for storing, retrieving, and querying document chunks and metadata. It integrates **FAISS** for vector similarity search and a **Streamlit frontend** for interacting with the system.
+
+The system now supports:
+
+* **Entity extraction** from documents using LLMs
+* **Multi-hop graph traversal** in Neo4j to connect related entities
+* **Vector similarity search** with FAISS
+* Combined **graph + vector context** for improved RAG answers
+* Option to **restrict answers to uploaded documents only**
 
 ---
 
@@ -8,8 +16,8 @@ This project demonstrates a **Retrieval-Augmented Generation (RAG) system** with
 
 ```
 graph_rag_project/
-├── config.py                  # Configuration file (Neo4j credentials, embeddings, LLM) – NOT included in GitHub
-├── graph_demo.py              # Neo4j demo: create graph nodes (Paper, Topic, Author) & relationships
+├── config.py                  # Neo4j credentials, embeddings, LLM (NOT included in GitHub)
+├── graph_demo.py              # Neo4j demo: create graph nodes & relationships
 ├── graph_rag_app.py           # Backend RAG pipeline: load docs, split, store in Neo4j, build vectorstore
 ├── graph_rag_app_streamlit.py # Streamlit backend: Neo4j + vectorstore integration
 ├── streamlit_app.py           # Streamlit frontend UI
@@ -38,16 +46,18 @@ faiss-cpu==1.7.4
 
 ---
 
-## ⚙️ Neo4j Setup (Main Focus)
+## ⚙️ Neo4j Setup
 
 1. **Install Neo4j Desktop**: [Download](https://neo4j.com/download/)
-2. **Create a Local Database**:
+
+2. **Create Local Database**:
 
    * Add → Local DBMS
    * Name: `graph_rag_local`
    * Password: e.g., `neo4j123`
    * Version: Neo4j 5.x (default)
-3. **Start the Database**
+
+3. **Start Database**
 
    * Bolt URL: `bolt://localhost:7687`
    * Browser URL: `http://localhost:7474`
@@ -58,24 +68,22 @@ faiss-cpu==1.7.4
 
 ### 1️⃣ Create Graph (graph_demo.py)
 
-* Creates nodes:
+* Nodes:
 
   * `Paper` → research papers
   * `Topic` → topics
   * `Author` → authors
-* Creates relationships:
 
-  * `RELATED_TO` → links Paper ↔ Topic
-  * `AUTHORED_BY` → links Paper ↔ Author
-  * `CONNECTED_TO` → links Topic ↔ Topic
+* Relationships:
+
+  * `RELATED_TO` → Paper ↔ Topic
+  * `AUTHORED_BY` → Paper ↔ Author
+  * `CONNECTED_TO` → Topic ↔ Topic
 
 **Example Multi-Hop Query**:
 
 ```python
 def multi_hop_query(tx, target_topic):
-    """
-    Finds papers related to topics connected to a given topic.
-    """
     query = """
     MATCH (p:Paper)-[:RELATED_TO]->(:Topic)-[:CONNECTED_TO]->(t:Topic {name: $target_topic})
     RETURN DISTINCT p.title AS title
@@ -88,14 +96,6 @@ Run:
 
 ```bash
 python graph_demo.py
-```
-
-You will see:
-
-```
-✅ Graph data created successfully!
-🔍 Retrieved context for topic 'Neo4j':
-Title: Graph RAG with Neo4j | Summary: Using graphs to improve retrieval
 ```
 
 ---
@@ -123,8 +123,7 @@ MATCH ()-[r]->() RETURN r
 * **Delete all nodes & relationships**:
 
 ```cypher
-MATCH (n)
-DETACH DELETE n
+MATCH (n) DETACH DELETE n
 ```
 
 * **Remove duplicate relationships**:
@@ -142,17 +141,18 @@ FOREACH (r IN TAIL(rels) | DELETE r)
 
 * `graph_rag_app.py` and `graph_rag_app_streamlit.py`:
 
-  * Load PDFs/TXT files from `uploads/`
+  * Load PDFs/TXT from `uploads/`
   * Split into chunks using `RecursiveCharacterTextSplitter`
   * Store chunks as `Chunk` nodes in Neo4j linked to `Document` nodes
-  * Use Neo4j for **graph-based retrieval** and FAISS for **vector-based retrieval**
+  * Extract entities and relationships from chunks
+  * Use **Neo4j graph** + **FAISS vector** retrieval
   * Combine both contexts for LLM-based answers
 
 ---
 
 ### 4️⃣ Streamlit Frontend
 
-* Upload documents and process them (Neo4j + FAISS)
+* Upload and process documents (Neo4j + FAISS)
 * Ask questions about uploaded documents
 * Option to **use only documents** or include general knowledge
 * Clear uploaded documents with confirmation
@@ -160,6 +160,34 @@ FOREACH (r IN TAIL(rels) | DELETE r)
 ```bash
 streamlit run streamlit_app.py
 ```
+
+---
+
+## ✅ Docs-Only Mode
+
+* When **“Use only uploaded documents”** is enabled:
+
+  * The system **only uses graph + vector contexts from uploaded documents**
+  * If a question is not covered, **no general-knowledge answer is provided**
+  * Prevents hallucinations from unrelated external knowledge
+
+* **Example**:
+
+  1. Upload PDFs/TXT files.
+  2. Enable the checkbox “Use only uploaded documents.”
+  3. Ask a question outside your documents:
+
+     ```
+     Who is the president of Mars?
+     ```
+
+     Response:
+
+     ```
+     💡 Uncheck to include general knowledge.
+     ```
+
+* Technical Note: `graph_rag_query()` now respects the `use_docs_only` flag by omitting fallback contexts outside uploaded documents.
 
 ---
 
@@ -188,27 +216,43 @@ Paper Nodes:
          └─────┘
 ```
 
-### How it maps to the project:
+---
 
-- Papers: Graph RAG with Neo4j, Intro to RAG
+## 🏁 Quick Start Example
 
-- Topics: Neo4j, RAG
+1. **Upload documents**
 
-- Authors: Alice (plus Bob, Charlie added dynamically)
+   * PDF or TXT files in Streamlit frontend
 
-- Relationships:
+2. **Process documents**
 
--- RELATED_TO → Paper ↔ Topic
+   * Chunks are stored in Neo4j and indexed in FAISS
 
--- AUTHORED_BY → Paper ↔ Author
+3. **Ask a question**
 
--- CONNECTED_TO → Topic ↔ Topic
+   * Enter text in the form
+   * Enable **“Use only uploaded documents”** to restrict answers
+
+4. **Clear documents (optional)**
+
+   * Click **“Clear Uploaded Documents”**
+   * Confirm deletion
+
+**Example Session**:
+
+| Step | Action                             | Result                                                  |
+| ---- | ---------------------------------- | ------------------------------------------------------- |
+| 1    | Upload `neo4j_intro.pdf`           | ✅ File saved to `uploads/`                              |
+| 2    | Process documents                  | ✅ Chunks stored in Neo4j + FAISS built                  |
+| 3    | Ask “Where was Barack Obama born?” | If Docs-Only: no answer unless covered in uploaded docs |
+| 4    | Disable Docs-Only                  | Answer may include general knowledge                    |
+| 5    | Clear documents                    | ✅ Files deleted, vectorstore reset                      |
 
 ---
 
 ## 📝 Notes
 
-* `config.py` contains:
+* `config.py`:
 
 ```python
 from neo4j import GraphDatabase
@@ -218,8 +262,8 @@ embeddings = ...  # your embeddings model
 llm = ...         # your LLM model
 ```
 
-* Run `graph_demo.py` anytime — safe, idempotent, avoids duplicates.
-* Neo4j is the primary focus — use the Browser to visualize and verify nodes/relationships.
+* `graph_demo.py` is safe to run multiple times — idempotent
+* Neo4j is the primary focus; use the Browser to visualize nodes/relationships
 
 ---
 
