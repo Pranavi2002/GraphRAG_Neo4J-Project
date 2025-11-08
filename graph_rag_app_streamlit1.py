@@ -1,3 +1,5 @@
+# no multi-hop traversal and delete docs 
+
 import os
 # Loaders and vectorstore from langchain_community
 from langchain_community.document_loaders import PyPDFLoader, TextLoader

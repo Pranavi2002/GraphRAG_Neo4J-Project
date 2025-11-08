@@ -1,3 +1,5 @@
+# no delete docs from neo4j
+
 import os
 import streamlit as st
 from graph_rag_app_streamlit import (
