@@ -1,6 +1,13 @@
 import os
 import streamlit as st
-import graph_rag_app_streamlit as rag  # backend module
+from graph_rag_app_streamlit import (
+    load_documents,
+    split_documents,
+    store_in_neo4j,
+    build_vectorstore,
+    graph_rag_query,
+    vectorstore  # global variable
+)
 
 # Ensure uploads folder exists
 os.makedirs("uploads", exist_ok=True)
@@ -8,34 +15,27 @@ os.makedirs("uploads", exist_ok=True)
 st.title("📚 Graph + Vector RAG System")
 
 # ---------------------------
-# Clear uploaded documents with two-step confirmation (includes Neo4j + local)
+# Clear uploaded documents with two-step confirmation
 # ---------------------------
+
 # Initialize session state
 if "confirm_delete" not in st.session_state:
     st.session_state.confirm_delete = False
 
 # Step 1: Show delete button
-if st.button("🗑️ Clear Uploaded Documents (Neo4j + Local)"):
+if st.button("🗑️ Clear Uploaded Documents"):
     st.session_state.confirm_delete = True
 
 # Step 2: Show confirmation checkbox if button was clicked
 if st.session_state.confirm_delete:
-    st.warning("⚠️ This will delete all uploaded documents and Neo4j data permanently!")
-    confirm = st.checkbox("Yes, I want to delete all uploaded documents and graph data")
-
+    st.warning("⚠️ This will delete all uploaded documents permanently!")
+    confirm = st.checkbox("Yes, I want to delete all uploaded documents")
     if confirm:
         try:
-            # 🗑️ 1️⃣ Delete files from local 'uploads' folder
             for f in os.listdir("uploads"):
                 os.remove(os.path.join("uploads", f))
-
-            # 🗑️ 2️⃣ Delete all docs/entities from Neo4j
-            rag.delete_all_docs()
-
-            # 🗑️ 3️⃣ Reset in-memory FAISS vectorstore
-            rag.vectorstore = None
-
-            st.success("✅ All uploaded documents and Neo4j data cleared!")
+            vectorstore = None  # reset vectorstore
+            st.success("✅ All uploaded documents cleared!")
             st.session_state.confirm_delete = False  # hide confirmation
         except Exception as e:
             st.error(f"⚠️ Could not clear documents: {e}")
@@ -73,14 +73,13 @@ else:
 # ---------------------------
 # 2️⃣ Process documents (existing + new)
 # ---------------------------
-if new_files or rag.vectorstore is None:
+if new_files or vectorstore is None:
     try:
-        docs = rag.load_documents("uploads")
+        docs = load_documents("uploads")
         if docs:  # Only process if there are documents
-            with st.spinner("⏳ Processing documents (splitting, entity extraction, graph + vector build)..."):
-                chunks = rag.split_documents(docs)
-                rag.store_in_neo4j(chunks)  # includes LLM refinement
-                rag.build_vectorstore(chunks)
+            chunks = split_documents(docs)
+            store_in_neo4j(chunks)
+            build_vectorstore(chunks)
             st.success(f"✅ Processed {len(chunks)} document chunks and built/updated vectorstore")
         else:
             st.info("No documents to process.")
@@ -111,7 +110,7 @@ with st.form("question_form"):
             st.session_state.processing_query = True
             # Show spinner while processing
             with st.spinner("⏳ Processing your question..."):
-                answer = rag.graph_rag_query(question, use_docs_only=use_docs_only)
+                answer = graph_rag_query(question, use_docs_only=use_docs_only)
             st.subheader("💡 Answer:")
             st.write(answer)
         except ValueError as e:
