@@ -1,4 +1,7 @@
-import os, streamlit as st
+# no delete a doc feature, no colors for nodes
+
+import os
+import streamlit as st
 import graph_rag_app_streamlit as rag
 from pyvis.network import Network
 import networkx as nx
@@ -11,17 +14,18 @@ st.set_page_config(page_title="Graph + Vector RAG", page_icon="📚", layout="ce
 st.title("📚 Graph + Vector RAG System")
 
 # ---------------------------------
-# Clear all uploaded documents
+# Clear uploaded documents
 # ---------------------------------
 if "confirm_delete" not in st.session_state:
     st.session_state.confirm_delete = False
 
-if st.button("🗑️ Clear All Uploaded Documents (Neo4j + Local)"):
+if st.button("🗑️ Clear Uploaded Documents (Neo4j + Local)"):
     st.session_state.confirm_delete = True
 
 if st.session_state.confirm_delete:
     st.warning("⚠️ This will delete all uploaded documents and Neo4j data permanently!")
     confirm = st.checkbox("Yes, I want to delete all uploaded documents and graph data")
+
     if confirm:
         try:
             for f in os.listdir("uploads"):
@@ -32,26 +36,6 @@ if st.session_state.confirm_delete:
             st.session_state.confirm_delete = False
         except Exception as e:
             st.error(f"⚠️ Could not clear documents: {e}")
-
-st.divider()
-
-# ---------------------------------
-# Delete a specific document
-# ---------------------------------
-st.subheader("🗑️ Delete a Specific Document")
-docs_list = os.listdir("uploads")
-if docs_list:
-    doc_to_delete = st.selectbox("Select document to delete:", docs_list)
-    if st.button(f"Delete '{doc_to_delete}'"):
-        try:
-            os.remove(os.path.join("uploads", doc_to_delete))
-            rag.delete_doc(doc_to_delete)
-            rag.vectorstore = None
-            st.success(f"✅ Document '{doc_to_delete}' deleted from local + Neo4j")
-        except Exception as e:
-            st.error(f"⚠️ Could not delete document: {e}")
-else:
-    st.info("No documents available for deletion.")
 
 st.divider()
 
@@ -88,7 +72,7 @@ if new_files or rag.vectorstore is None:
                 chunks = rag.split_documents(docs)
                 rag.store_in_neo4j(chunks)
                 rag.build_vectorstore(chunks)
-            st.success(f"✅ Processed {len(chunks)} chunks and built/updated vectorstore")
+            st.success(f"✅ Processed {len(chunks)} document chunks and built/updated vectorstore")
         else:
             st.info("No documents to process.")
     except Exception as e:
@@ -97,29 +81,40 @@ if new_files or rag.vectorstore is None:
 st.divider()
 
 # ---------------------------------
-# Question form + graph visualization
+# Question form
 # ---------------------------------
 with st.form("question_form"):
     st.subheader("💬 Ask a Question")
     question = st.text_input("Ask a question about your documents:")
     hops = st.slider("Select number of hops (graph traversal depth)", min_value=1, max_value=5, value=3)
-    use_docs_only = st.checkbox("Use only uploaded documents", value=True)
+    use_docs_only = st.checkbox("Use only uploaded documents (no general knowledge)", value=True)
     show_paths = st.checkbox("Show traversed graph paths", value=False)
     submitted = st.form_submit_button("Get Answer")
 
 if submitted and question:
     with st.spinner("⏳ Processing your question..."):
         try:
+            # ---------------------------
+            # Get answer from RAG
+            # ---------------------------
             answer = rag.graph_rag_query(question, hops=hops, use_docs_only=use_docs_only)
             st.subheader("💡 Answer:")
             st.write(answer)
 
             if show_paths:
                 st.subheader("🔍 Traversed Graph Visualization")
+
+                # ---------------------------
+                # Extract entities from question (simple approach)
+                # ---------------------------
+                # For now, just split question words and filter for capitalized words (entity candidates)
                 entity_candidates = [w for w in question.split() if w[0].isupper()]
                 if not entity_candidates:
-                    entity_candidates = [question]
+                    entity_candidates = [question]  # fallback
 
+                # ---------------------------
+                # Fetch paths from Neo4j
+                # ---------------------------
                 all_paths = []
                 with rag.driver.session() as session:
                     for entity in entity_candidates:
@@ -133,29 +128,24 @@ if submitted and question:
                         all_paths.extend([record["path_nodes"] for record in result])
 
                 if all_paths:
+                    # ---------------------------
+                    # Build NetworkX graph
+                    # ---------------------------
                     G = nx.Graph()
                     for path in all_paths:
-                        path = [n for n in path if n]
+                        # Filter out None or empty nodes
+                        path = [node for node in path if node]
                         for i in range(len(path)-1):
                             G.add_edge(path[i], path[i+1])
 
+                    # ---------------------------
+                    # Pyvis network
+                    # ---------------------------
                     net = Network(height="500px", width="100%", bgcolor="#222222", font_color="white", notebook=False)
                     net.from_nx(G)
-
-                    # ---------------------------
-                    # Node colors based on type
-                    # ---------------------------
-                    for node in net.nodes:
-                        if node["id"].startswith("Document"):
-                            node["color"] = "#2E86C1"; node["size"] = 25
-                        elif "_" in node["id"]:  # assume chunk IDs contain "_"
-                            node["color"] = "#A569BD"; node["size"] = 15
-                        else:
-                            node["color"] = "#58D68D"; node["size"] = 20  # Entity
-
-                        node["label"] = node["id"]
-
                     net.show_buttons(filter_=['physics'])
+
+                    # Save and embed in Streamlit
                     tmp_path = "graph.html"
                     net.save_graph(tmp_path)
                     st.components.v1.html(open(tmp_path, 'r', encoding='utf-8').read(), height=550)
